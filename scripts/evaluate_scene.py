@@ -40,14 +40,12 @@ def evaluate_scene(scene_id, model, device="cuda"):
         return None
 
     with rasterio.open(in_path) as src:
-        # NOTE: Assuming the input.tif saved in demo/scenes is ALREADY ordered [B04, B03, B02, B08] 
-        # (since precompute_scenes.py wrote it that way from the raw data). 
-        # But wait, precompute_scenes.py writes dst.write(src.read()), meaning it preserves the RAW band order.
-        # So we should use the same BAND_ORDER here if it's reading the original.
-        # But evaluate_scene reads from `demo/scenes/{scene_id}/input.tif`.
-        hr = src.read([4, 3, 2, 8]).astype("float32") / 10_000  # Verify this with Siddarth's real band order
+        # NOTE: file has 4 bands ordered [B02, B03, B04, B08].
+        # We need [B04, B03, B02, B08] (Red, Green, Blue, NIR), so we use rasterio indices [3, 2, 1, 4]
+        hr = src.read([3, 2, 1, 4]).astype("float32") / 10_000
 
-    lr = np.stack([gaussian_filter(hr[b], sigma=1.0)[::4, ::4] for b in range(4)])
+    import cv2
+    lr = np.stack([cv2.resize(gaussian_filter(hr[b], sigma=1.0), (hr.shape[2]//4, hr.shape[1]//4), interpolation=cv2.INTER_CUBIC) for b in range(4)])
     sr = run_inference(model, lr, scale=4, device=device, patch_size=128, overlap=32)
 
     h, w = min(sr.shape[1], hr.shape[1]), min(sr.shape[2], hr.shape[2])

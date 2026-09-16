@@ -55,15 +55,25 @@ def process_scene(scene_id, model, device="cuda"):
         sr_profile.update(transform=new_transform, width=sr_uint16.shape[2],
                            height=sr_uint16.shape[1], count=4, dtype="uint16")
         with rasterio.open(f"{out_dir}/sr.tif", "w", **sr_profile) as dst:
-            dst.write(sr_uint16)
+            # Reorder from [Red, Green, Blue, NIR] back to [Blue, Green, Red, NIR] for the GeoTIFF
+            dst.write(sr_uint16[[2, 1, 0, 3]])
 
         save_preview(arr[:3], f"{out_dir}/input_preview.png")
         save_preview(sr_uint16[:3], f"{out_dir}/sr_preview.png")
 
+        from rasterio.warp import transform_bounds
+        native_bounds = rasterio.open(f"{out_dir}/sr.tif").bounds
+        wgs84_bounds = transform_bounds(profile["crs"], "EPSG:4326", *native_bounds)
+        
         metadata = {
             "id": scene_id,
             "crs": str(profile["crs"]),
-            "bounds": list(rasterio.open(f"{out_dir}/sr.tif").bounds),
+            "bounds": {
+                "west": wgs84_bounds[0],
+                "south": wgs84_bounds[1],
+                "east": wgs84_bounds[2],
+                "north": wgs84_bounds[3]
+            },
             "input_resolution_m": 10,
             "output_resolution_m": 2.5,
             "scale_factor": SCALE,

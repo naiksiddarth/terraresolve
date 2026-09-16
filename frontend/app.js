@@ -151,7 +151,8 @@ async function displaySceneOnMap(sceneId) {
   if (!sceneId || !modalMapInstance) return;
 
   try {
-    const res = await fetch(`${API_BASE}/api/scenes/${sceneId}`);
+    const cb = new Date().getTime();
+    const res = await fetch(`${API_BASE}/api/scenes/${sceneId}?t=${cb}`);
     if (!res.ok) throw new Error(`Scene detail error ${res.status}`);
     const sceneDetail = await res.json();
 
@@ -165,8 +166,9 @@ async function displaySceneOnMap(sceneId) {
     if (currentLayerControl) modalMapInstance.removeControl(currentLayerControl);
 
     // Static PNG URLs as specified in contract (NOT L.tileLayer)
-    const inputUrl = `${API_BASE}/api/scenes/${sceneId}/input`;
-    const srUrl = `${API_BASE}/api/scenes/${sceneId}/sr`;
+    const cacheBuster = new Date().getTime();
+    const inputUrl = `${API_BASE}/api/scenes/${sceneId}/input?t=${cacheBuster}`;
+    const srUrl = `${API_BASE}/api/scenes/${sceneId}/sr?t=${cacheBuster}`;
 
     // Create Leaflet Image Overlays
     inputImageOverlay = L.imageOverlay(inputUrl, bounds, {
@@ -184,15 +186,22 @@ async function displaySceneOnMap(sceneId) {
     // Add SR image overlay by default
     srImageOverlay.addTo(modalMapInstance);
 
-    // Add layer control for toggling between Input and Super-Resolved PNGs
-    const overlayMaps = {
+    // Add layer control as base maps (mutually exclusive radio buttons)
+    const baseMaps = {
       "SEN2SR Output (2.5m <4m)": srImageOverlay,
       "Original Sentinel-2 (10m)": inputImageOverlay
     };
-    currentLayerControl = L.control.layers(null, overlayMaps, { collapsed: false }).addTo(modalMapInstance);
+    currentLayerControl = L.control.layers(baseMaps, null, { collapsed: false }).addTo(modalMapInstance);
 
-    // Fit map bounds to the scene
-    modalMapInstance.fitBounds(bounds, { padding: [30, 30] });
+    // Force map to recalculate its container dimensions (modal animation may still
+    // be in progress when the map was first instantiated), then zoom to the scene.
+    modalMapInstance.invalidateSize();
+    modalMapInstance.fitBounds(bounds, { padding: [20, 20] });
+    // Belt-and-suspenders: re-fit after a short delay to catch any late CSS reflow
+    setTimeout(() => {
+      modalMapInstance.invalidateSize();
+      modalMapInstance.fitBounds(bounds, { padding: [20, 20] });
+    }, 300);
 
   } catch (err) {
     console.warn(`Could not load scene imagery for ${sceneId}:`, err);
@@ -407,13 +416,14 @@ function openExplorerModal() {
       modalMapInstance = L.map('modalMap', {
         zoomControl: true,
         minZoom: 4,
-        maxZoom: 20
+        maxZoom: 22
       }).setView([13.1007, 77.5963], 13);
 
       // Keep existing Esri satellite basemap underneath as specified
       L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
         attribution: '&copy; Esri &mdash; Earthstar Geographics',
-        maxZoom: 19
+        maxNativeZoom: 19,
+        maxZoom: 22
       }).addTo(modalMapInstance);
 
       if (currentSceneId) {

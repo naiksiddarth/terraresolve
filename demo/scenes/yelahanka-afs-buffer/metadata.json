@@ -1,0 +1,20 @@
+{
+  "id": "yelahanka-afs-buffer",
+  "crs": "EPSG:32643",
+  "bounds": {
+    "west": 77.58066457353891,
+    "south": 13.120832834885896,
+    "east": 77.59938094745506,
+    "north": 13.139176411292578
+  },
+  "input_resolution_m": 10,
+  "output_resolution_m": 2.5,
+  "scale_factor": 4,
+  "model": "SEN2SR (SPAN, 472K params) \u2014 ESAOpenSR",
+  "bands_used": [
+    "B04",
+    "B03",
+    "B02",
+    "B08"
+  ]
+}

@@ -27,10 +27,9 @@ def process_job(conn, row, model, device):
         with rasterio.open(row["input_path"]) as src:
             arr = src.read()
             profile = src.profile
-        # NOTE: assumes first 4 bands are already [B04,B03,B02,B08] order.
-        # If arbitrary user uploads can have different band order, this needs
-        # real band-order detection before it's safe against real user files.
-        X = (arr[:4] / 10_000).astype("float32")
+        # NOTE: real files are [B02, B03, B04, B08]. Model expects [B04, B03, B02, B08].
+        # Reorder numpy array from (Blue, Green, Red, NIR) to (Red, Green, Blue, NIR).
+        X = (arr[[2, 1, 0, 3]] / 10_000).astype("float32")
 
         _update(conn, job_id, status="INFERENCE", stage="running SEN2SR", progress_pct=30)
         sr = run_inference(model, X, scale=SCALE, device=device, patch_size=PATCH_SIZE, overlap=OVERLAP)

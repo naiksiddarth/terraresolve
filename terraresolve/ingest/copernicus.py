@@ -122,7 +122,7 @@ def search_products(
     )
     filter_clauses = [
         f"Collection/Name eq '{collection}'",
-        f"contains(Name,'{product_type}')",
+        f"contains(Name,'MSIL2A')",
         f"OData.CSC.Intersects(area=geography'SRID=4326;{polygon}')",
         f"ContentDate/Start gt {start_date}T00:00:00.000Z",
         f"ContentDate/Start lt {end_date}T00:00:00.000Z",
