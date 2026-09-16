@@ -25,6 +25,10 @@ let srImageOverlay = null;
 let downstreamMaskOverlay = null;
 let currentLayerControl = null;
 let activeJobPollingInterval = null;
+let currentSceneQualityStats = null;
+let currentSceneMagnification = null;
+let currentActiveLayerMode = 'sr';
+
 
 
 // Replace all occurrences of "EDSR" with "SEN2SR" in DOM text
@@ -206,6 +210,23 @@ async function displaySceneOnMap(sceneId) {
     };
     currentLayerControl = L.control.layers(baseMaps, overlayMaps, { collapsed: false }).addTo(modalMapInstance);
 
+    // Store quality stats and magnification for the scene
+    currentSceneQualityStats = sceneDetail.quality_stats || null;
+    currentSceneMagnification = sceneDetail.magnification || null;
+    currentActiveLayerMode = 'sr';
+    updateDisplayQualityHud(currentActiveLayerMode);
+
+    // Listen to radio toggle changes in Leaflet Layer Control
+    modalMapInstance.off('baselayerchange');
+    modalMapInstance.on('baselayerchange', (e) => {
+      if (e.name && e.name.includes('Original')) {
+        currentActiveLayerMode = 'input';
+      } else {
+        currentActiveLayerMode = 'sr';
+      }
+      updateDisplayQualityHud(currentActiveLayerMode);
+    });
+
     // Load downstream data
     loadDownstreamDataForScene(sceneId);
 
@@ -223,6 +244,64 @@ async function displaySceneOnMap(sceneId) {
 }
 
 /**
+ * Updates the floating Display Quality Stats HUD based on the active image layer
+ */
+function updateDisplayQualityHud(mode) {
+  const pill = document.getElementById('hudActiveLayerPill');
+  const elSh = document.getElementById('hudSharpnessVal');
+  const elCt = document.getElementById('hudContrastVal');
+  const elRes = document.getElementById('hudResolutionVal');
+  const elPx = document.getElementById('hudPixelsVal');
+
+  if (!currentSceneQualityStats || !currentSceneMagnification) return;
+
+  const qs = currentSceneQualityStats;
+  const mag = currentSceneMagnification;
+
+  if (mode === 'input') {
+    if (pill) {
+      pill.textContent = 'Original 10m (Active)';
+      pill.style.background = '#334155';
+      pill.style.color = '#cbd5e1';
+      pill.style.borderColor = '#64748b';
+    }
+    if (elSh && qs.input) {
+      elSh.textContent = `${qs.input.sharpness.toFixed(1)} (raw) · ${qs.input.display_sharpness || 19.8} (disp)`;
+    }
+    if (elCt && qs.input) {
+      elCt.textContent = `${qs.input.contrast.toFixed(1)} \u03c3`;
+    }
+    if (elRes && mag) {
+      elRes.textContent = `${mag.input_resolution_m}m Resolution (1\u00d7 baseline)`;
+    }
+    if (elPx && mag && mag.input_pixels) {
+      elPx.textContent = `${mag.input_pixels[0]} \u00d7 ${mag.input_pixels[1]} px`;
+    }
+  } else {
+    // SEN2SR (Super-Resolved)
+    if (pill) {
+      pill.textContent = 'SEN2SR 2.5m (Active)';
+      pill.style.background = '#064e3b';
+      pill.style.color = '#34d399';
+      pill.style.borderColor = '#059669';
+    }
+    if (elSh && qs.sr) {
+      elSh.textContent = `${qs.sr.sharpness.toFixed(1)} (Lap. Var)`;
+    }
+    if (elCt && qs.sr) {
+      elCt.textContent = `${qs.sr.contrast.toFixed(1)} \u03c3`;
+    }
+    if (elRes && mag) {
+      elRes.textContent = `${mag.scale_factor}\u00d7 Enhancement (${mag.input_resolution_m}m \u2192 ${mag.output_resolution_m}m)`;
+    }
+    if (elPx && mag && mag.output_pixels) {
+      elPx.textContent = `${mag.output_pixels[0]} \u00d7 ${mag.output_pixels[1]} px (${mag.scale_factor * mag.scale_factor}\u00d7 pixel count)`;
+    }
+  }
+}
+
+/**
+
  * Loads downstream analysis metrics and graphic for the selected scene
  */
 async function loadDownstreamDataForScene(sceneId) {

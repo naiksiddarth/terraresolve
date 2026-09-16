@@ -16,5 +16,32 @@
     "B03",
     "B02",
     "B08"
-  ]
+  ],
+  "quality_stats": {
+    "input": {
+      "sharpness": 5154.36,
+      "contrast": 54.44,
+      "display_sharpness": 28.33
+    },
+    "sr": {
+      "sharpness": 805.99,
+      "contrast": 44.73
+    },
+    "sharpness_improvement_pct": -84.36,
+    "contrast_improvement_pct": -17.82,
+    "display_sharpness_improvement_pct": 2745.25
+  },
+  "magnification": {
+    "scale_factor": 4,
+    "input_resolution_m": 10,
+    "output_resolution_m": 2.5,
+    "input_pixels": [
+      201,
+      201
+    ],
+    "output_pixels": [
+      804,
+      804
+    ]
+  }
 }

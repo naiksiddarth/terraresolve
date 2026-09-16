@@ -179,8 +179,42 @@
       <div class="modal-body">
         <div id="modalMap" style="width: 100%; height: 100%;"></div>
 
+        <!-- Real Precomputed Display Quality Stats Badge / HUD (Separate from Reference Metrics) -->
+        <div id="displayQualityHud" class="display-quality-hud">
+          <div class="hud-header">
+            <div class="hud-badge-title">
+              <i class="fa-solid fa-chart-simple" style="color: #34d399;"></i>
+              <span>DISPLAY QUALITY STATS</span>
+            </div>
+            <span class="hud-mode-pill" id="hudActiveLayerPill">SEN2SR 2.5m</span>
+          </div>
+          <div class="hud-content">
+            <div class="hud-metric-row">
+              <span class="hud-label">Sharpness (Lap. Var):</span>
+              <strong class="hud-val" id="hudSharpnessVal">--</strong>
+            </div>
+            <div class="hud-metric-row">
+              <span class="hud-label">Contrast (Std Dev):</span>
+              <strong class="hud-val" id="hudContrastVal">--</strong>
+            </div>
+            <div class="hud-metric-row">
+              <span class="hud-label">Magnification:</span>
+              <strong class="hud-val" id="hudResolutionVal">4&times; (10m &rarr; 2.5m)</strong>
+            </div>
+            <div class="hud-metric-row">
+              <span class="hud-label">Pixel Grid:</span>
+              <strong class="hud-val" id="hudPixelsVal">-- &rarr; -- px</strong>
+            </div>
+          </div>
+          <div class="hud-footer-note">
+            <i class="fa-solid fa-circle-info" style="margin-top: 1px;"></i>
+            <span>Direct perceptual display statistics. Distinct from reference-fidelity benchmarks (PSNR / SSIM).</span>
+          </div>
+        </div>
+
         <!-- Downstream Water Analysis Side Panel / Drawer -->
         <div id="downstreamPanel" class="downstream-panel">
+
           <div class="downstream-panel-header">
             <div style="display: flex; align-items: center; gap: 8px;">
               <i class="fa-solid fa-water" style="color: #0284c7;"></i>

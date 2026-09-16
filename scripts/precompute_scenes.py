@@ -67,6 +67,16 @@ def process_scene(scene_id, model, device="cuda"):
         native_bounds = rasterio.open(f"{out_dir}/sr.tif").bounds
         wgs84_bounds = transform_bounds(profile["crs"], "EPSG:4326", *native_bounds)
         
+        import cv2
+        in_gray = cv2.imread(f"{out_dir}/input_preview.png", cv2.IMREAD_GRAYSCALE)
+        sr_gray = cv2.imread(f"{out_dir}/sr_preview.png", cv2.IMREAD_GRAYSCALE)
+        in_sh = float(cv2.Laplacian(in_gray, cv2.CV_64F).var())
+        in_ct = float(in_gray.std())
+        sr_sh = float(cv2.Laplacian(sr_gray, cv2.CV_64F).var())
+        sr_ct = float(sr_gray.std())
+        sh_imp = float((sr_sh - in_sh) / (in_sh + 1e-6) * 100.0)
+        ct_imp = float((sr_ct - in_ct) / (in_ct + 1e-6) * 100.0)
+        
         metadata = {
             "id": scene_id,
             "crs": str(profile["crs"]),
@@ -81,9 +91,23 @@ def process_scene(scene_id, model, device="cuda"):
             "scale_factor": SCALE,
             "model": "SEN2SR (SPAN, 472K params) — ESAOpenSR",
             "bands_used": ["B04", "B03", "B02", "B08"],
+            "quality_stats": {
+                "input": {"sharpness": round(in_sh, 2), "contrast": round(in_ct, 2)},
+                "sr": {"sharpness": round(sr_sh, 2), "contrast": round(sr_ct, 2)},
+                "sharpness_improvement_pct": round(sh_imp, 2),
+                "contrast_improvement_pct": round(ct_imp, 2)
+            },
+            "magnification": {
+                "scale_factor": SCALE,
+                "input_resolution_m": 10,
+                "output_resolution_m": 2.5,
+                "input_pixels": [arr.shape[2], arr.shape[1]],
+                "output_pixels": [sr_uint16.shape[2], sr_uint16.shape[1]]
+            }
         }
         with open(f"{out_dir}/metadata.json", "w") as f:
             json.dump(metadata, f, indent=2)
+
 
         print(f"[{scene_id}] done -> {out_dir}")
     except FileNotFoundError:
