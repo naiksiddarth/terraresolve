@@ -11,6 +11,7 @@ checkpoints/*
 
 # Generated previews / SR tile cache -- regenerate with scripts/visualize.py
 previews/
+demo/tune_previews/
 webapp/static/__pycache__/
 
 # Python
