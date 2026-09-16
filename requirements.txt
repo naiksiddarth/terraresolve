@@ -1,0 +1,24 @@
+torch>=2.0
+numpy
+scipy
+pillow
+pyyaml
+rasterio
+scikit-image
+pytorch-msssim
+einops
+tqdm
+requests
+
+# --- optional: Copernicus live ingestion (scripts/fetch_copernicus.py) ---
+# no extra packages beyond the above (uses requests + rasterio)
+
+# --- optional: web viewer (webapp/main.py) ---
+fastapi
+uvicorn
+mercantile
+rio-tiler
+
+# --- optional: Maxar India-Floods-Oct-2023 integration (scripts/prepare_maxar_sikkim.py) ---
+leafmap
+pystac-client

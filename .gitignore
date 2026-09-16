@@ -1,0 +1,30 @@
+# Datasets -- large, regenerable via scripts/prepare_sen2naip.py + the download
+# commands in DATASETS.md. Not committed.
+data/
+!data/.gitkeep
+
+# All checkpoints except the final trained one, which IS committed below
+# (see the `git add -f` step) so anyone cloning the repo can run inference
+# immediately without retraining.
+checkpoints/*
+!checkpoints/edsr_epoch50.pt
+
+# Generated previews / SR tile cache -- regenerate with scripts/visualize.py
+previews/
+webapp/static/__pycache__/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Env / secrets -- never commit Copernicus credentials
+.env
+*.env

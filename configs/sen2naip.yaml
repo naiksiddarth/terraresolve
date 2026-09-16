@@ -1,0 +1,62 @@
+# Points the pipeline at real SEN2NAIP cross-sensor pairs instead of
+# the synthetic placeholder tiles. Run scripts/prepare_sen2naip.py
+# first to produce data/sen2naip/lr and data/sen2naip/hr.
+#
+# Note the normalize modes: real Sentinel-2 L2A (LR side) is uint16
+# scaled by 10000, NOT spread across the full 16-bit range, and the
+# NAIP-derived HR side is plain 8-bit -- using the wrong divisor on
+# either side silently mismatches their brightness scales. See
+# terraresolve/data/datasets.py::_normalize for why "auto" would get
+# this wrong.
+
+model:
+  name: edsr             # swap to swinir here (or configs/swinir.yaml) once this baseline runs
+  params:
+    in_channels: 4
+    n_feats: 64
+    n_resblocks: 16
+    scale: 4               # matches SEN2NAIP cross-sensor's native 121px -> 484px ratio exactly
+    res_scale: 0.1
+
+loss:
+  terms:
+    l1: 1.0
+    ssim: 0.2
+    sam: 0.1
+  term_kwargs:
+    ssim:
+      channels: 4
+
+data:
+  type: paired_real
+  params:
+    lr_dir: data/sen2naip/lr
+    hr_dir: data/sen2naip/hr
+    patch_size: 64          # must be <= 121 (native LR tile size)
+    scale: 4
+    augment: true
+    lr_normalize: sentinel2_l2a
+    hr_normalize: uint8
+
+optimizer:
+  lr: 0.0001
+
+train:
+  epochs: 50
+  batch_size: 8
+  num_workers: 2
+  checkpoint_dir: checkpoints
+
+eval:
+  metrics: [psnr, ssim, cc, ergas, sam]
+
+downstream:
+  task: ndwi_water
+  params:
+    threshold: 0.0
+
+inference:
+  patch_size: 64
+  overlap: 8
+
+device: auto

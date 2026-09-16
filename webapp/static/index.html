@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>TerraResolve Viewer</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet-side-by-side@2.2.0/index.css" />
+<style>
+  html, body { margin: 0; height: 100%; font-family: -apple-system, Segoe UI, Roboto, sans-serif; background: #0b0e12; color: #e6e8eb; }
+  #map { position: absolute; top: 56px; bottom: 0; left: 0; right: 0; background: #10151c; }
+  #topbar {
+    height: 56px; display: flex; align-items: center; gap: 16px;
+    padding: 0 16px; background: #10151c; border-bottom: 1px solid #232a33;
+    box-sizing: border-box;
+  }
+  #topbar h1 { font-size: 15px; font-weight: 600; margin: 0; color: #f5f7fa; white-space: nowrap; }
+  #topbar select, #topbar button {
+    background: #1a2029; color: #e6e8eb; border: 1px solid #2c3540; border-radius: 6px;
+    padding: 6px 10px; font-size: 13px;
+  }
+  #topbar button { cursor: pointer; }
+  #topbar button:hover { background: #232b36; }
+  #status { font-size: 12px; color: #8a95a3; margin-left: auto; white-space: nowrap; }
+  .panel-label {
+    position: absolute; top: 12px; z-index: 1000; background: rgba(10,13,17,0.75);
+    padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 600; letter-spacing: .02em;
+    pointer-events: none; border: 1px solid rgba(255,255,255,0.08);
+  }
+  #label-left { left: 12px; }
+  #label-right { right: 12px; }
+  .leaflet-sbs-divider { background-color: #4da3ff !important; }
+  .leaflet-sbs-range { z-index: 1000; }
+  #hint {
+    position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%);
+    font-size: 11px; color: #6b7684; background: rgba(10,13,17,0.6); padding: 3px 10px; border-radius: 5px;
+    z-index: 900;
+  }
+</style>
+</head>
+<body>
+
+<div id="topbar">
+  <h1>TerraResolve &mdash; SR Viewer</h1>
+  <label style="font-size:12px;color:#8a95a3;">Scene</label>
+  <select id="tileSelect"></select>
+  <label style="font-size:12px;color:#8a95a3;">Left</label>
+  <select id="leftSelect">
+    <option value="lr">Original (LR, Sentinel-2)</option>
+    <option value="sr" selected>Super-Resolved (SR)</option>
+    <option value="hr">Reference (HR)</option>
+  </select>
+  <label style="font-size:12px;color:#8a95a3;">Right</label>
+  <select id="rightSelect">
+    <option value="lr" selected>Original (LR, Sentinel-2)</option>
+    <option value="sr">Super-Resolved (SR)</option>
+    <option value="hr">Reference (HR)</option>
+  </select>
+  <span id="status">loading model info...</span>
+</div>
+
+<div id="map"></div>
+<div class="panel-label" id="label-left">SR</div>
+<div class="panel-label" id="label-right">LR (Original)</div>
+<div id="hint">Zoom in like a normal map &mdash; drag the blue divider to compare. Same real Sentinel-2 tile on both sides, reprojected the same way.</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet-side-by-side@2.2.0/leaflet-side-by-side.js"></script>
+<script>
+const LABELS = { lr: "LR (Original Sentinel-2)", sr: "SR (TerraResolve)", hr: "HR (Reference)" };
+
+const map = L.map('map', { zoomControl: true, minZoom: 10, maxZoom: 22 }).setView([20.5, 78.9], 5);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+  attribution: '&copy; OpenStreetMap &copy; CARTO', maxZoom: 20, opacity: 0.35
+}).addTo(map);
+
+let leftLayer = null, rightLayer = null, sbsControl = null, currentTileId = null, currentBounds = null;
+
+function tileLayerFor(source, tileId) {
+  return L.tileLayer(`/tiles/${source}/${tileId}/{z}/{x}/{y}.png`, {
+    tileSize: 256, maxNativeZoom: 19, maxZoom: 22, minZoom: 10,
+  });
+}
+
+function rebuildComparison() {
+  if (!currentTileId) return;
+  const leftSrc = document.getElementById('leftSelect').value;
+  const rightSrc = document.getElementById('rightSelect').value;
+
+  if (sbsControl) { sbsControl.remove(); sbsControl = null; }
+  if (leftLayer) { map.removeLayer(leftLayer); }
+  if (rightLayer) { map.removeLayer(rightLayer); }
+
+  leftLayer = tileLayerFor(leftSrc, currentTileId).addTo(map);
+  rightLayer = tileLayerFor(rightSrc, currentTileId).addTo(map);
+  sbsControl = L.control.sideBySide(leftLayer, rightLayer).addTo(map);
+
+  document.getElementById('label-left').textContent = LABELS[leftSrc];
+  document.getElementById('label-right').textContent = LABELS[rightSrc];
+}
+
+async function loadTileList() {
+  const res = await fetch('/api/tiles');
+  const tiles = await res.json();
+  const select = document.getElementById('tileSelect');
+  select.innerHTML = '';
+  tiles.forEach((t, i) => {
+    const opt = document.createElement('option');
+    opt.value = t.id;
+    opt.textContent = `${t.id}  (${t.center[0].toFixed(3)}, ${t.center[1].toFixed(3)})`;
+    opt.dataset.bbox = JSON.stringify(t.bbox);
+    select.appendChild(opt);
+  });
+  if (tiles.length) {
+    select.value = tiles[0].id;
+    jumpTo(tiles[0]);
+  }
+  document.getElementById('status').textContent = `${tiles.length} real scenes available`;
+}
+
+function jumpTo(tile) {
+  currentTileId = tile.id;
+  const [west, south, east, north] = tile.bbox;
+  currentBounds = L.latLngBounds([south, west], [north, east]);
+  map.fitBounds(currentBounds, { maxZoom: 18, padding: [20, 20] });
+  rebuildComparison();
+}
+
+document.getElementById('tileSelect').addEventListener('change', async (e) => {
+  const res = await fetch('/api/tiles');
+  const tiles = await res.json();
+  const tile = tiles.find(t => t.id === e.target.value);
+  if (tile) jumpTo(tile);
+});
+document.getElementById('leftSelect').addEventListener('change', rebuildComparison);
+document.getElementById('rightSelect').addEventListener('change', rebuildComparison);
+
+fetch('/api/model').then(r => r.json()).then(m => {
+  document.getElementById('status').textContent = m.loaded ? `model: ${m.loaded}` : 'no model loaded';
+});
+
+loadTileList();
+</script>
+</body>
+</html>
