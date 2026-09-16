@@ -21,10 +21,12 @@ OUT_DIR = "demo/scenes"
 SCALE = 4
 BAND_ORDER = [3, 2, 1, 4]  # adjust to Siddarth's actual file band order -> [B04,B03,B02,B08]
 
-def percentile_stretch(arr, low=2, high=98):
+def percentile_stretch(arr, low=1, high=99):
     lo, hi = np.percentile(arr, [low, high])
     stretched = np.clip((arr - lo) / (hi - lo + 1e-6), 0, 1)
-    return (stretched * 255).astype("uint8")
+    # Gamma correction: brings out shadow detail and tones down glowing whites
+    gamma_corrected = np.power(stretched, 0.7)
+    return (gamma_corrected * 255).astype("uint8")
 
 def save_preview(rgb_bands_uint16, path):
     rgb = np.stack([percentile_stretch(rgb_bands_uint16[i]) for i in range(3)], axis=-1)

@@ -513,6 +513,10 @@ html, body {
 .modal-body {
   flex: 1;
   position: relative;
+  /* Explicit pixel height required for Leaflet to compute fitBounds correctly.
+     85vh container minus ~57px header = remaining map height. */
+  min-height: 0;
+  height: calc(85vh - 57px);
 }
 
 /* Responsive adjustments */
