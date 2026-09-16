@@ -2,7 +2,7 @@
 
 > **Intended audience**: AI agents and developers building Android or Web frontends against the TerraResolve FastAPI backend.
 > **Backend entry point**: `python webapp/main.py`
-> **Default base URL**: `http://127.0.0.1:8000`
+> **Base URL**: User-provided at runtime — **never hardcode a URL** (see [Base URL Configuration](#base-url-configuration))
 > **Framework**: FastAPI (Python) — auto-generates interactive docs at `/docs` and `/redoc`
 
 ---
@@ -11,18 +11,19 @@
 
 1. [Overview](#overview)
 2. [Architecture & Data Flow](#architecture--data-flow)
-3. [Server Setup](#server-setup)
-4. [Data Models](#data-models)
-5. [API Endpoints](#api-endpoints)
+3. [Base URL Configuration](#base-url-configuration) ← **read this first**
+4. [Server Setup](#server-setup)
+5. [Data Models](#data-models)
+6. [API Endpoints](#api-endpoints)
    - [GET /api/tiles](#get-apitiles)
    - [GET /api/model](#get-apimodel)
    - [POST /api/model](#post-apimodel)
    - [GET /tiles/{source}/{tile_id}/{z}/{x}/{y}.png](#get-tilessourcetile_idzxypng)
-6. [Static File Serving](#static-file-serving)
-7. [Integration Guide — Web Client (JavaScript)](#integration-guide--web-client-javascript)
-8. [Integration Guide — Android Client (Kotlin/Retrofit)](#integration-guide--android-client-kotlinretrofit)
-9. [Error Reference](#error-reference)
-10. [Key Constants & Conventions](#key-constants--conventions)
+7. [Static File Serving](#static-file-serving)
+8. [Integration Guide — Web Client (JavaScript)](#integration-guide--web-client-javascript)
+9. [Integration Guide — Android Client (Kotlin/Retrofit)](#integration-guide--android-client-kotlinretrofit)
+10. [Error Reference](#error-reference)
+11. [Key Constants & Conventions](#key-constants--conventions)
 
 ---
 
@@ -38,6 +39,212 @@ super-resolved (SR) output at 4× resolution (~2.5 m/px) using a trained EDSR mo
 - Allows hot-swapping of checkpoints without restarting the server
 - Caches SR inference results in memory and on disk to avoid re-running the model on every tile
   request
+
+---
+
+## Base URL Configuration
+
+> **🚨 RULE FOR ALL FRONTEND AGENTS**: Never hardcode a base URL anywhere in the app.
+> The server can run on any host and port (developer laptop, LAN server, cloud VM).
+> The user must always supply the base URL at runtime.
+
+### UX Flow
+
+```
+App launch
+    │
+    ├─ [No saved URL] ──► Show "Enter Server URL" prompt
+    │                         User types e.g. http://192.168.1.42:8000
+    │                         Validate by calling GET {url}/api/model
+    │                         On success → save URL → proceed to app
+    │                         On failure → show error, let user retry
+    │
+    └─ [Saved URL found] ──► Show dialog:
+                              "Use saved server: http://192.168.1.42:8000?"
+                              [Use Saved]  →  validate & proceed
+                              [Enter New]  →  show URL prompt (same as above)
+```
+
+### Validation
+
+After the user enters a URL, **always validate it** before proceeding:
+
+1. `GET {baseUrl}/api/model`
+2. If response is `200 OK` with `{ loaded, scale }` → URL is valid, save it and continue
+3. If network error / non-200 → show error: `"Cannot reach server at {baseUrl}. Check the URL and that the server is running."`
+
+### Web Client — `localStorage`
+
+```javascript
+// ─── Base URL management ─────────────────────────────────────────────────────
+const STORAGE_KEY = 'terraresolve_base_url';
+
+/** Returns a validated base URL, prompting the user as needed. */
+async function resolveBaseUrl() {
+  const saved = localStorage.getItem(STORAGE_KEY);
+
+  if (saved) {
+    // Offer to reuse or replace
+    const useSaved = await showDialog({
+      title: 'Server Connection',
+      message: `Use saved server?\n${saved}`,
+      confirmLabel: 'Use Saved',
+      cancelLabel: 'Enter New',
+    });
+    if (useSaved) {
+      if (await validateBaseUrl(saved)) return saved;
+      showError(`Cannot reach ${saved}. Please enter a new URL.`);
+    }
+  }
+
+  // Prompt for new URL
+  return await promptAndSaveBaseUrl();
+}
+
+async function promptAndSaveBaseUrl() {
+  while (true) {
+    const url = await showInputDialog({
+      title: 'Enter Server URL',
+      placeholder: 'http://192.168.1.42:8000',
+      hint: 'Include protocol and port. No trailing slash.',
+    });
+    if (!url) continue;                          // user dismissed without input
+    const clean = url.replace(/\/$/, '');        // strip trailing slash
+    if (await validateBaseUrl(clean)) {
+      localStorage.setItem(STORAGE_KEY, clean);
+      return clean;
+    }
+    showError(`Cannot reach server at ${clean}. Check the URL and try again.`);
+  }
+}
+
+async function validateBaseUrl(url) {
+  try {
+    const res = await fetch(`${url}/api/model`, { signal: AbortSignal.timeout(5000) });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+// ─── App bootstrap ────────────────────────────────────────────────────────────
+(async () => {
+  const BASE_URL = await resolveBaseUrl();   // ← use this everywhere, never a literal string
+  await initApp(BASE_URL);
+})();
+```
+
+### Android Client — `SharedPreferences`
+
+```kotlin
+// ─── Base URL management ─────────────────────────────────────────────────────
+const val PREFS_NAME   = "terraresolve_prefs"
+const val KEY_BASE_URL = "base_url"
+
+object UrlPrefs {
+    fun getSaved(context: Context): String? =
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+               .getString(KEY_BASE_URL, null)
+
+    fun save(context: Context, url: String) =
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+               .edit().putString(KEY_BASE_URL, url.trimEnd('/')).apply()
+
+    fun clear(context: Context) =
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+               .edit().remove(KEY_BASE_URL).apply()
+}
+
+// ─── Validation ───────────────────────────────────────────────────────────────
+/** Returns true if the server at [url] responds to GET /api/model with 200. */
+suspend fun validateBaseUrl(url: String): Boolean = withContext(Dispatchers.IO) {
+    try {
+        val response = OkHttpClient.Builder()
+            .connectTimeout(5, TimeUnit.SECONDS)
+            .readTimeout(5, TimeUnit.SECONDS)
+            .build()
+            .newCall(Request.Builder().url("${url.trimEnd('/')}/api/model").build())
+            .execute()
+        response.isSuccessful
+    } catch (e: Exception) {
+        false
+    }
+}
+
+// ─── ViewModel ────────────────────────────────────────────────────────────────
+class ServerSetupViewModel(application: Application) : AndroidViewModel(application) {
+
+    private val _baseUrl = MutableStateFlow<String?>(UrlPrefs.getSaved(application))
+    val baseUrl: StateFlow<String?> = _baseUrl
+
+    val hasSavedUrl: Boolean get() = _baseUrl.value != null
+
+    /** Call when user confirms they want to use the saved URL. */
+    fun useSaved(onResult: (Boolean) -> Unit) {
+        viewModelScope.launch {
+            val valid = validateBaseUrl(_baseUrl.value!!)
+            if (!valid) UrlPrefs.clear(getApplication())
+            onResult(valid)
+        }
+    }
+
+    /** Call with a URL the user typed. Saves it if valid. */
+    fun submitNew(url: String, onResult: (Boolean) -> Unit) {
+        viewModelScope.launch {
+            val clean = url.trimEnd('/')
+            val valid = validateBaseUrl(clean)
+            if (valid) {
+                UrlPrefs.save(getApplication(), clean)
+                _baseUrl.value = clean
+            }
+            onResult(valid)
+        }
+    }
+}
+
+// ─── ApiClient — rebuilt whenever BASE_URL changes ────────────────────────────
+object ApiClient {
+    private var _baseUrl: String = ""
+    lateinit var api: TerraResolveApi
+
+    /** Call once after resolveBaseUrl() succeeds, before any API calls. */
+    fun init(baseUrl: String) {
+        if (baseUrl == _baseUrl) return
+        _baseUrl = baseUrl
+        api = Retrofit.Builder()
+            .baseUrl("$baseUrl/")
+            .client(
+                OkHttpClient.Builder()
+                    .connectTimeout(10, TimeUnit.SECONDS)
+                    .readTimeout(90, TimeUnit.SECONDS)   // SR tiles can be slow
+                    .addInterceptor(HttpLoggingInterceptor().apply {
+                        level = HttpLoggingInterceptor.Level.BASIC
+                    })
+                    .build()
+            )
+            .addConverterFactory(GsonConverterFactory.create())
+            .build()
+            .create(TerraResolveApi::class.java)
+    }
+}
+```
+
+### Tile URLs after the base URL is known
+
+The XYZ tile URL is always constructed at runtime from the resolved `baseUrl`:
+
+```javascript
+// Web
+function tileUrl(source, tileId) {
+  return `${BASE_URL}/tiles/${source}/${tileId}/{z}/{x}/{y}.png`;
+}
+```
+
+```kotlin
+// Android
+fun tileUrl(source: String, tileId: String) =
+    "${ApiClient.baseUrl}/tiles/$source/$tileId/{z}/{x}/{y}.png"
+```
 
 ---
 
@@ -376,7 +583,7 @@ Study this file before building any new frontend.
 
 ## Integration Guide — Web Client (JavaScript)
 
-All examples assume `BASE_URL = 'http://127.0.0.1:8000'`.
+> All examples below use `BASE_URL` as a variable resolved at runtime via `resolveBaseUrl()` (see [Base URL Configuration](#base-url-configuration)). **Never substitute a hardcoded string.**
 
 ### 1. Check model status on load
 
@@ -464,22 +671,21 @@ async function swapModel(configPath, checkpointPath) {
 ### 6. Full minimal bootstrap
 
 ```javascript
-const BASE_URL = 'http://127.0.0.1:8000';
-
-const map = L.map('map', { minZoom: 4, maxZoom: 22 }).setView([20.5, 78.9], 5);
-
-// Add a dark basemap for context
-L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-  attribution: '© OpenStreetMap © CARTO', maxZoom: 20, opacity: 0.35
-}).addTo(map);
-
+// BASE_URL is NEVER hardcoded — always resolved from user input + localStorage
 (async () => {
-  const model = await checkModel();
-  const tiles  = await loadScenes(map);
+  const BASE_URL = await resolveBaseUrl();   // shows prompt or reuse-dialog as needed
+
+  const map = L.map('map', { minZoom: 4, maxZoom: 22 }).setView([20.5, 78.9], 5);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    attribution: '© OpenStreetMap © CARTO', maxZoom: 20, opacity: 0.35
+  }).addTo(map);
+
+  const model = await checkModel(BASE_URL);
+  const tiles  = await loadScenes(BASE_URL, map);
   if (tiles.length && model.loaded) {
     const tileId = tiles[0].id;
-    makeSrLayerWithSpinner(tileId).addTo(map);
-    makeTileLayer('lr', tileId).addTo(map);
+    makeSrLayerWithSpinner(BASE_URL, tileId).addTo(map);
+    makeTileLayer(BASE_URL, 'lr', tileId).addTo(map);
   }
 })();
 ```
@@ -548,33 +754,22 @@ interface TerraResolveApi {
 
 ### 4. Retrofit client
 
+> The `ApiClient` is initialised with the URL resolved at runtime — see `ApiClient.init(baseUrl)`
+> in [Base URL Configuration](#base-url-configuration). **Never set a hardcoded `BASE_URL`
+> constant here.** Call `ApiClient.init(resolvedUrl)` once after the user confirms the server
+> URL, then use `ApiClient.api` for all subsequent calls.
+
 ```kotlin
-import okhttp3.OkHttpClient
-import okhttp3.logging.HttpLoggingInterceptor
-import retrofit2.Retrofit
-import retrofit2.converter.gson.GsonConverterFactory
-import java.util.concurrent.TimeUnit
-
-object ApiClient {
-    // 10.0.2.2 is the Android Emulator alias for the host machine's localhost.
-    // Replace with your LAN IP (e.g. "http://192.168.1.42:8000/") for a physical device.
-    private const val BASE_URL = "http://10.0.2.2:8000/"
-
-    private val okhttp = OkHttpClient.Builder()
-        .addInterceptor(HttpLoggingInterceptor().apply {
-            level = HttpLoggingInterceptor.Level.BASIC
-        })
-        .connectTimeout(10, TimeUnit.SECONDS)
-        .readTimeout(90, TimeUnit.SECONDS)   // SR tiles can take up to 60 s on first request
-        .build()
-
-    val api: TerraResolveApi = Retrofit.Builder()
-        .baseUrl(BASE_URL)
-        .client(okhttp)
-        .addConverterFactory(GsonConverterFactory.create())
-        .build()
-        .create(TerraResolveApi::class.java)
-}
+// ApiClient.init(baseUrl) is defined in the Base URL Configuration section above.
+// It builds a Retrofit instance with the user-supplied URL and 90 s read timeout.
+// Example call order in your Activity/Fragment:
+//
+//   viewModel.useSaved { valid ->
+//       if (valid) {
+//           ApiClient.init(UrlPrefs.getSaved(this)!!)
+//           startMainActivity()
+//       } else showErrorAndPromptNew()
+//   }
 ```
 
 ### 5. ViewModel
@@ -621,13 +816,15 @@ class MapViewModel : ViewModel() {
 
 ### 6. Tile URL construction for map SDKs
 
-The XYZ tile URL works directly with MapLibre, Google Maps, and OSMDroid:
+The XYZ tile URL works directly with MapLibre, Google Maps, and OSMDroid.
+Use the runtime-resolved `baseUrl` — **never a hardcoded string**:
 
 ```kotlin
-const val BASE_URL = "http://10.0.2.2:8000"
-
-fun tileUrl(source: String, tileId: String) =
-    "$BASE_URL/tiles/$source/$tileId/{z}/{x}/{y}.png"
+// baseUrl comes from ApiClient after ApiClient.init(resolvedUrl) is called
+fun tileUrl(source: String, tileId: String): String {
+    val base = ApiClient.baseUrl   // property added to ApiClient, mirrors _baseUrl
+    return "$base/tiles/$source/$tileId/{z}/{x}/{y}.png"
+}
 ```
 
 **MapLibre GL Android — add as a raster layer:**
@@ -704,8 +901,11 @@ map.addOnMapLoadingFinishedListener {
 
 | Constant | Value | Notes |
 |----------|-------|-------|
-| Default port | `8000` | Set in `webapp/main.py` → `uvicorn.run(..., port=8000)` |
-| Android emulator localhost | `10.0.2.2` | Maps to `127.0.0.1` on the host machine |
+| Base URL | **User-provided at runtime** | Never hardcoded. Persisted in `localStorage` (web) / `SharedPreferences` (Android). |
+| Default server port | `8000` | Set in `webapp/main.py` → `uvicorn.run(..., port=8000)` |
+| Android emulator alias | `10.0.2.2` | Maps to host `127.0.0.1` — only valid in emulator, not on physical devices |
+| localStorage key (web) | `terraresolve_base_url` | Key used to persist the base URL in the browser |
+| SharedPreferences key (Android) | `base_url` in `terraresolve_prefs` | Key used to persist the base URL on device |
 | Tile size | 256 px | Standard XYZ slippy-map tile |
 | Default upscale factor | `4×` | LR 10 m/px → SR ~2.5 m/px |
 | Input bands | 4 | Blue, Green, Red, NIR (Sentinel-2 L2A order) |
