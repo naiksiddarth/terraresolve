@@ -1,0 +1,61 @@
+# TerraResolve config -- SEN2SRLite (ESA OpenSR, SPAN architecture).
+#
+# This replaces EDSR/SwinIR with ESA's pretrained SEN2SRLite model
+# (NonReference_RGBN_x4). Weights live in models/pretrained/sen2sr_rgbn_x4/
+# and are loaded from disk at first inference -- no training needed.
+#
+# Band ordering expected by SEN2SR: [B04 (Red), B03 (Green), B02 (Blue), B08 (NIR)]
+# Input scale: divide raw Sentinel-2 DN by 10_000 before passing to model.
+#
+# To use this config:
+#   python scripts/run_inference.py --config configs/sen2sr.yaml
+
+model:
+  name: sen2sr
+  params:
+    weights_dir: models/pretrained/sen2sr_rgbn_x4
+    device: cuda          # switch to cpu if no GPU available
+
+# Loss / training config below is kept for completeness but is irrelevant
+# for SEN2SR -- the model is frozen pretrained and not fine-tuned here.
+loss:
+  terms:
+    l1: 1.0
+    ssim: 0.2
+    sam: 0.1
+  term_kwargs:
+    ssim:
+      channels: 4
+
+data:
+  type: synthetic_degrade
+  params:
+    hr_dir: data/hr_reference
+    patch_size: 64
+    scale: 4
+    augment: false          # no augmentation during eval
+
+optimizer:
+  lr: 0.0001               # unused (model is frozen)
+
+train:
+  epochs: 0                # set > 0 only if fine-tuning on your own data
+  batch_size: 1            # SEN2SR processes full scenes, not small patches
+  num_workers: 2
+  checkpoint_dir: checkpoints
+
+eval:
+  metrics: [psnr, ssim, cc, ergas, sam]
+
+downstream:
+  task: ndwi_water
+  params:
+    threshold: 0.0
+
+# inference.patch_size / overlap are ignored for SEN2SR
+# (USES_INTERNAL_TILING=True -- predict_large handles it at overlap=32px)
+inference:
+  patch_size: 128           # kept for documentation; not used by SEN2SR path
+  overlap: 32               # SEN2SR's internal overlap value
+
+device: auto                # auto | cuda | cpu

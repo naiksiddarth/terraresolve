@@ -1,0 +1,22 @@
+[
+  {
+    "id": "yelahanka-lake",
+    "name": "Yelahanka Lake (Water)",
+    "category": "water"
+  },
+  {
+    "id": "yelahanka-newtown",
+    "name": "Yelahanka New Town (Dense Urban)",
+    "category": "urban"
+  },
+  {
+    "id": "yelahanka-afs-buffer",
+    "name": "Yelahanka AFS Buffer (Vegetation)",
+    "category": "vegetation"
+  },
+  {
+    "id": "yelahanka-mixed",
+    "name": "Yelahanka Mixed (Mixed Urban/Limitations)",
+    "category": "mixed"
+  }
+]
