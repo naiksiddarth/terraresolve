@@ -1,0 +1,20 @@
+{
+  "id": "yelahanka-lake",
+  "crs": "EPSG:32643",
+  "bounds": {
+    "west": 77.58561603461563,
+    "south": 13.091873331674075,
+    "east": 77.60433009588824,
+    "north": 13.110216829013522
+  },
+  "input_resolution_m": 10,
+  "output_resolution_m": 2.5,
+  "scale_factor": 4,
+  "model": "SEN2SR (SPAN, 472K params) \u2014 ESAOpenSR",
+  "bands_used": [
+    "B04",
+    "B03",
+    "B02",
+    "B08"
+  ]
+}

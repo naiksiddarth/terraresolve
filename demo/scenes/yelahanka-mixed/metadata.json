@@ -1,0 +1,20 @@
+{
+  "id": "yelahanka-mixed",
+  "crs": "EPSG:32643",
+  "bounds": {
+    "west": 77.60060272899769,
+    "south": 13.070852738127803,
+    "east": 77.61931577884367,
+    "north": 13.089196828823138
+  },
+  "input_resolution_m": 10,
+  "output_resolution_m": 2.5,
+  "scale_factor": 4,
+  "model": "SEN2SR (SPAN, 472K params) \u2014 ESAOpenSR",
+  "bands_used": [
+    "B04",
+    "B03",
+    "B02",
+    "B08"
+  ]
+}
