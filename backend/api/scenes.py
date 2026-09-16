@@ -64,9 +64,40 @@ async def get_scene_metrics(scene_id: str):
         return json.load(f)
 
 @router.get("/{scene_id}/downstream")
-async def get_scene_downstream(scene_id: str):
+async def get_scene_downstream(scene_id: str, format: str = None, layer: str = None):
     scene_dir = get_scene_dir(scene_id)
+    if format == "json":
+        json_path = os.path.join(scene_dir, "downstream_metrics.json")
+        if not os.path.exists(json_path):
+            raise HTTPException(status_code=404, detail="Downstream metrics not found")
+        with open(json_path, "r") as f:
+            return json.load(f)
+            
+    if layer in ("overlay", "mask"):
+        overlay_path = os.path.join(scene_dir, "downstream_mask_sr.png")
+        if not os.path.exists(overlay_path):
+            raise HTTPException(status_code=404, detail="Downstream overlay not found")
+        return FileResponse(overlay_path, media_type="image/png")
+
     downstream_path = os.path.join(scene_dir, "downstream.png")
     if not os.path.exists(downstream_path):
         raise HTTPException(status_code=404, detail="Downstream result not found")
     return FileResponse(downstream_path, media_type="image/png")
+
+@router.get("/{scene_id}/downstream/metrics")
+async def get_scene_downstream_metrics(scene_id: str):
+    scene_dir = get_scene_dir(scene_id)
+    json_path = os.path.join(scene_dir, "downstream_metrics.json")
+    if not os.path.exists(json_path):
+        raise HTTPException(status_code=404, detail="Downstream metrics not found")
+    with open(json_path, "r") as f:
+        return json.load(f)
+
+@router.get("/{scene_id}/downstream/overlay")
+async def get_scene_downstream_overlay(scene_id: str):
+    scene_dir = get_scene_dir(scene_id)
+    overlay_path = os.path.join(scene_dir, "downstream_mask_sr.png")
+    if not os.path.exists(overlay_path):
+        raise HTTPException(status_code=404, detail="Downstream overlay not found")
+    return FileResponse(overlay_path, media_type="image/png")
+

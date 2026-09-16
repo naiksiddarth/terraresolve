@@ -22,8 +22,10 @@ let currentSceneId = null;
 let modalMapInstance = null;
 let inputImageOverlay = null;
 let srImageOverlay = null;
+let downstreamMaskOverlay = null;
 let currentLayerControl = null;
 let activeJobPollingInterval = null;
+
 
 // Replace all occurrences of "EDSR" with "SEN2SR" in DOM text
 function correctModelNameInDOM() {
@@ -163,12 +165,14 @@ async function displaySceneOnMap(sceneId) {
     // Clean up previous image overlays and layer control
     if (inputImageOverlay) modalMapInstance.removeLayer(inputImageOverlay);
     if (srImageOverlay) modalMapInstance.removeLayer(srImageOverlay);
+    if (downstreamMaskOverlay) modalMapInstance.removeLayer(downstreamMaskOverlay);
     if (currentLayerControl) modalMapInstance.removeControl(currentLayerControl);
 
     // Static PNG URLs as specified in contract (NOT L.tileLayer)
     const cacheBuster = new Date().getTime();
     const inputUrl = `${API_BASE}/api/scenes/${sceneId}/input?t=${cacheBuster}`;
     const srUrl = `${API_BASE}/api/scenes/${sceneId}/sr?t=${cacheBuster}`;
+    const downstreamOverlayUrl = `${API_BASE}/api/scenes/${sceneId}/downstream/overlay?t=${cacheBuster}`;
 
     // Create Leaflet Image Overlays
     inputImageOverlay = L.imageOverlay(inputUrl, bounds, {
@@ -183,21 +187,31 @@ async function displaySceneOnMap(sceneId) {
       alt: 'SEN2SR Super-Resolved (2.5m)'
     });
 
+    downstreamMaskOverlay = L.imageOverlay(downstreamOverlayUrl, bounds, {
+      opacity: 0.9,
+      interactive: true,
+      alt: 'NDWI Water & Shoreline (2.5m)'
+    });
+
     // Add SR image overlay by default
     srImageOverlay.addTo(modalMapInstance);
 
-    // Add layer control as base maps (mutually exclusive radio buttons)
+    // Add layer control with base maps and downstream overlay toggle
     const baseMaps = {
       "SEN2SR Output (2.5m <4m)": srImageOverlay,
       "Original Sentinel-2 (10m)": inputImageOverlay
     };
-    currentLayerControl = L.control.layers(baseMaps, null, { collapsed: false }).addTo(modalMapInstance);
+    const overlayMaps = {
+      "🌊 Water & Shoreline (NDWI)": downstreamMaskOverlay
+    };
+    currentLayerControl = L.control.layers(baseMaps, overlayMaps, { collapsed: false }).addTo(modalMapInstance);
 
-    // Force map to recalculate its container dimensions (modal animation may still
-    // be in progress when the map was first instantiated), then zoom to the scene.
+    // Load downstream data
+    loadDownstreamDataForScene(sceneId);
+
+    // Force map to recalculate its container dimensions
     modalMapInstance.invalidateSize();
     modalMapInstance.fitBounds(bounds, { padding: [20, 20] });
-    // Belt-and-suspenders: re-fit after a short delay to catch any late CSS reflow
     setTimeout(() => {
       modalMapInstance.invalidateSize();
       modalMapInstance.fitBounds(bounds, { padding: [20, 20] });
@@ -207,6 +221,58 @@ async function displaySceneOnMap(sceneId) {
     console.warn(`Could not load scene imagery for ${sceneId}:`, err);
   }
 }
+
+/**
+ * Loads downstream analysis metrics and graphic for the selected scene
+ */
+async function loadDownstreamDataForScene(sceneId) {
+  if (!sceneId) return;
+  try {
+    const cb = new Date().getTime();
+    const res = await fetch(`${API_BASE}/api/scenes/${sceneId}/downstream/metrics?t=${cb}`);
+    if (!res.ok) {
+      console.warn(`No downstream metrics available for ${sceneId}`);
+      return;
+    }
+    const m = await res.json();
+
+    const elAreaLr = document.getElementById('dsAreaLr');
+    const elPxLr = document.getElementById('dsPxLr');
+    const elAreaSr = document.getElementById('dsAreaSr');
+    const elPxSr = document.getElementById('dsPxSr');
+    const elShoreLr = document.getElementById('dsShoreLr');
+    const elPerimLr = document.getElementById('dsPerimLr');
+    const elShoreSr = document.getElementById('dsShoreSr');
+    const elPerimSr = document.getElementById('dsPerimSr');
+    const elSummary = document.getElementById('dsDensitySummary');
+    const elImg = document.getElementById('dsGraphicImg');
+
+    const lr = m['input_10m'] || {};
+    const sr = m['sr_2.5m'] || {};
+    const comp = m['comparison'] || {};
+
+    if (elAreaLr && lr.area_ha !== undefined) elAreaLr.textContent = `${lr.area_ha.toFixed(2)} ha`;
+    if (elPxLr && lr.water_pixels !== undefined) elPxLr.textContent = `${lr.water_pixels.toLocaleString()} pixels`;
+    if (elAreaSr && sr.area_ha !== undefined) elAreaSr.textContent = `${sr.area_ha.toFixed(2)} ha`;
+    if (elPxSr && sr.water_pixels !== undefined) elPxSr.textContent = `${sr.water_pixels.toLocaleString()} pixels`;
+
+    if (elShoreLr && lr.shoreline_pixels !== undefined) elShoreLr.textContent = `${lr.shoreline_pixels.toLocaleString()} px`;
+    if (elPerimLr && lr.estimated_perimeter_m !== undefined) elPerimLr.textContent = `Est. ${Math.round(lr.estimated_perimeter_m).toLocaleString()}m perimeter`;
+    if (elShoreSr && sr.shoreline_pixels !== undefined) elShoreSr.textContent = `${sr.shoreline_pixels.toLocaleString()} px`;
+    if (elPerimSr && sr.estimated_perimeter_m !== undefined) elPerimSr.textContent = `Est. ${Math.round(sr.estimated_perimeter_m).toLocaleString()}m perimeter`;
+
+    if (elSummary && comp.shoreline_pixel_density_ratio !== undefined) {
+      elSummary.innerHTML = `Shoreline boundary pixel density increases by <strong>${comp.shoreline_pixel_density_ratio}x</strong> in SR (+${comp.area_change_pct}% resolved water fringe).`;
+    }
+    if (elImg) {
+      elImg.src = `${API_BASE}/api/scenes/${sceneId}/downstream?t=${cb}`;
+    }
+
+  } catch (err) {
+    console.warn('Failed to load downstream data:', err);
+  }
+}
+
 
 /* =============================================================================
    3. ASYNC UPLOAD & JOB POLLING FLOW
@@ -398,12 +464,41 @@ if (closeModalBtn) {
   });
 }
 
+const btnToggleDownstream = document.getElementById('btnToggleDownstream');
+const downstreamPanel = document.getElementById('downstreamPanel');
+const btnCloseDownstreamPanel = document.getElementById('btnCloseDownstreamPanel');
+const dsImgWrapper = document.getElementById('dsImgWrapper');
+
+if (btnToggleDownstream && downstreamPanel) {
+  btnToggleDownstream.addEventListener('click', () => {
+    downstreamPanel.classList.toggle('active');
+    btnToggleDownstream.classList.toggle('active');
+  });
+}
+
+if (btnCloseDownstreamPanel && downstreamPanel) {
+  btnCloseDownstreamPanel.addEventListener('click', () => {
+    downstreamPanel.classList.remove('active');
+    if (btnToggleDownstream) btnToggleDownstream.classList.remove('active');
+  });
+}
+
+if (dsImgWrapper) {
+  dsImgWrapper.addEventListener('click', () => {
+    const img = document.getElementById('dsGraphicImg');
+    if (img && img.src) {
+      window.open(img.src, '_blank');
+    }
+  });
+}
+
 if (modalTileSelect) {
   modalTileSelect.addEventListener('change', (e) => {
     currentSceneId = e.target.value;
     displaySceneOnMap(currentSceneId);
   });
 }
+
 
 function openExplorerModal() {
   explorerModal.classList.add('active');

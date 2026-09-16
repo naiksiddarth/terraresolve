@@ -1,0 +1,37 @@
+{
+  "scene_id": "yelahanka-newtown",
+  "task": "NDWI Water-Body Boundary Delineation",
+  "threshold": 0.0,
+  "formula": "NDWI = (Green - NIR) / (Green + NIR)",
+  "bands": {
+    "green": "B03 (Band 2)",
+    "nir": "B08 (Band 4)"
+  },
+  "input_10m": {
+    "resolution_m": 10.0,
+    "pixel_area_m2": 100.0,
+    "water_pixels": 967,
+    "area_m2": 96700.0,
+    "area_ha": 9.67,
+    "shoreline_pixels": 219,
+    "estimated_perimeter_m": 2190.0,
+    "mean_ndwi_water": 0.041999999433755875
+  },
+  "sr_2.5m": {
+    "resolution_m": 2.5,
+    "pixel_area_m2": 6.25,
+    "water_pixels": 18914,
+    "area_m2": 118212.5,
+    "area_ha": 11.821,
+    "shoreline_pixels": 4649,
+    "estimated_perimeter_m": 11622.5,
+    "mean_ndwi_water": 0.19480000436306
+  },
+  "comparison": {
+    "area_delta_ha": 2.151,
+    "area_change_pct": 22.25,
+    "shoreline_pixel_density_ratio": 21.23,
+    "perimeter_resolved_m_delta": 9432.5
+  },
+  "honesty_framing": "Downstream boundary-delineation precision at 4x pixel density (10m -> 2.5m). Note: SR does not create new spectral information; it resolves mixed-pixel boundaries."
+}

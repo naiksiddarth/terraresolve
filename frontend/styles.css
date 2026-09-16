@@ -519,6 +519,169 @@ html, body {
   height: calc(85vh - 57px);
 }
 
+/* -----------------------------------------------------------------------------
+   DOWNSTREAM WATER ANALYSIS PANEL & CONTROLS
+   ----------------------------------------------------------------------------- */
+.btn-downstream-toggle {
+  background: #f0f9ff;
+  color: #0369a1;
+  border: 1px solid #bae6fd;
+  border-radius: 8px;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s ease;
+}
+
+.btn-downstream-toggle:hover {
+  background: #e0f2fe;
+  border-color: #7dd3fc;
+  transform: translateY(-1px);
+}
+
+.btn-downstream-toggle.active {
+  background: #0284c7;
+  color: #ffffff;
+  border-color: #0284c7;
+}
+
+.downstream-panel {
+  position: absolute;
+  top: 0;
+  right: -440px;
+  width: 420px;
+  max-width: 90vw;
+  height: 100%;
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(12px);
+  box-shadow: -8px 0 24px rgba(0, 0, 0, 0.12);
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  transition: right 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  border-left: 1px solid #e2e8f0;
+}
+
+.downstream-panel.active {
+  right: 0;
+}
+
+.downstream-panel-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid #e2e8f0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #f8fafc;
+}
+
+.downstream-panel-body {
+  padding: 18px 20px;
+  overflow-y: auto;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.downstream-honesty-banner {
+  background: #f0f9ff;
+  border: 1px solid #bae6fd;
+  border-left: 4px solid #0284c7;
+  border-radius: 8px;
+  padding: 12px 14px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: #0369a1;
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.downstream-metrics-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.downstream-metric-card {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.downstream-metric-card.highlight-card {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+}
+
+.downstream-metric-card .metric-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.downstream-metric-card.highlight-card .metric-label {
+  color: #15803d;
+}
+
+.downstream-metric-card .metric-value {
+  font-size: 20px;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.downstream-metric-card.highlight-card .metric-value {
+  color: #0e5c3c;
+}
+
+.downstream-metric-card .metric-sub {
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.downstream-stat-banner {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 12.5px;
+  color: #166534;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.downstream-img-wrapper {
+  background: #0f172a;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid #334155;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  cursor: pointer;
+}
+
+.downstream-graphic-img {
+  width: 100%;
+  height: auto;
+  display: block;
+  transition: transform 0.2s ease;
+}
+
+.downstream-img-wrapper:hover .downstream-graphic-img {
+  transform: scale(1.02);
+}
+
 /* Responsive adjustments */
 @media (max-width: 1100px) {
   .navbar, .footer-bar, .hero-wrapper {
@@ -534,3 +697,4 @@ html, body {
     font-size: 42px;
   }
 }
+
